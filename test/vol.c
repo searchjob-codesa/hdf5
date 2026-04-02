@@ -28,6 +28,7 @@
 #include "H5VLpkg.h" /* Virtual Object Layer                 */
 
 /* Filename */
+
 static const char *FILENAME[] = {"vol_test_file", NULL};
 
 #define NATIVE_VOL_TEST_GROUP_NAME     "test_group"
@@ -2564,7 +2565,80 @@ error:
     H5E_END_TRY
 
     return FAIL;
-} /* end test_query_optional() */
+
+/*-------------------------------------------------------------------------
+ * Function:    test_H5VLget_wrap_ctx
+ *
+ * Purpose:     Tests H5VLget_wrap_ctx functionality through a pass-through
+ *              VOL connector wrapper context.
+ *
+ * Return:      SUCCEED/FAIL
+ *
+ *-------------------------------------------------------------------------
+ */
+static herr_t
+test_H5VLget_wrap_ctx(void)
+{
+    hid_t  file_id        = H5I_INVALID_HID;
+    hid_t  fapl_id        = H5I_INVALID_HID;
+    hid_t  vol_id         = H5I_INVALID_HID;
+    void  *under_object   = NULL;
+    void  *wrap_ctx       = NULL;
+    herr_t ret;
+
+    TESTING("H5VLget_wrap_ctx functionality");
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR;
+
+    if ((file_id = H5Fcreate(FILENAME[0], H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0)
+        TEST_ERROR;
+
+    /* Get the VOL connector ID for the file */
+    if ((vol_id = H5VLget_connector_id(file_id)) < 0)
+        TEST_ERROR;
+
+    /* Get the underlying object */
+    if (NULL == (under_object = H5VLobject(file_id)))
+        TEST_ERROR;
+
+    /* Test H5VLget_wrap_ctx */
+    ret = H5VLget_wrap_ctx(under_object, vol_id, &wrap_ctx);
+    if (ret < 0)
+        TEST_ERROR;
+
+    /* Free wrap context if it was allocated */
+    if (wrap_ctx) {
+        if (H5VLfree_wrap_ctx(wrap_ctx, vol_id) < 0)
+            TEST_ERROR;
+    }
+
+    if (H5VLclose(vol_id) < 0)
+        TEST_ERROR;
+
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR;
+
+    h5_delete_test_file(FILENAME[0], fapl_id);
+
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR;
+
+    PASSED();
+
+    return SUCCEED;
+
+error:
+    H5E_BEGIN_TRY
+    {
+        H5VLclose(vol_id);
+        H5Fclose(file_id);
+        H5Pclose(fapl_id);
+    }
+    H5E_END_TRY
+
+    return FAIL;
+} /* end test_H5VLget_wrap_ctx() */
 
 /*-------------------------------------------------------------------------
  * Function:    main
@@ -2604,6 +2678,7 @@ main(void)
     nerrors += test_wrap_register() < 0 ? 1 : 0;
     nerrors += test_info_to_str() < 0 ? 1 : 0;
     nerrors += test_query_optional() < 0 ? 1 : 0;
+    nerrors += test_H5VLget_wrap_ctx() < 0 ? 1 : 0;
 
     if (nerrors) {
         printf("***** %d Virtual Object Layer TEST%s FAILED! *****\n", nerrors, nerrors > 1 ? "S" : "");
